@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect and archive Granada Weather forecasts
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=jakekit
+Environment=WEATHER_DATA_DIR=/var/lib/pi-weather
+Environment=WEATHER_FORECAST_DEFAULT=weatherkit
+EnvironmentFile=/etc/pi-weather.env
+ExecStart=/usr/bin/python3 /opt/pi-weather/forecast_collector.py

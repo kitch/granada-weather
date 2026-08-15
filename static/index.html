@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#091512">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Granada Weather">
+  <title>Granada Weather</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+  <link rel="stylesheet" href="/app.css?v=27">
+  <link rel="stylesheet" href="/buttons.css?v=8">
+  <link rel="stylesheet" href="/forecast.css?v=10">
+</head>
+<body>
+  <main>
+    <header class="site-header">
+      <h1>Granada Weather</h1>
+    </header>
+    <section class="current" aria-label="Current conditions">
+      <div class="editorial-hero">
+        <div class="editorial-temperature-copy">
+          <span>OUTDOOR TEMPERATURE</span>
+          <small id="apparent-temp" class="apparent-temp" hidden></small>
+        </div>
+        <div class="editorial-temperature"><strong id="temp">—</strong><span>°F</span></div>
+        <div class="editorial-notes">
+          <div><span>HUMIDITY</span><b><strong id="humidity">—</strong><small>%</small></b></div>
+          <div><span>PRESSURE</span><b><strong id="pressure">—</strong><small>hPa</small><i id="pressure-trend" aria-label="Pressure trend">—</i></b></div>
+        </div>
+      </div>
+      <div class="detail-grid">
+        <div class="split-detail rain-detail">
+          <div><p><small>LAST HOUR RAIN</small><b><strong id="rain-hour">—</strong><em>in</em></b></p><p><small>TODAY RAIN</small><b><strong id="rain-today">—</strong><em>in</em></b></p></div>
+        </div>
+        <div class="wind-detail"><span>WIND</span><b><strong id="wind-direction">—</strong> <strong id="wind-speed">—</strong><small>mph</small></b></div>
+        <div class="split-detail sun-detail">
+          <div><p><small>UV INDEX</small><b><strong id="uv-index">—</strong></b></p><p><small>SOLAR</small><b><strong id="solar-radiation">—</strong><em>W/m²</em></b></p></div>
+        </div>
+        <div class="sky-detail" aria-label="Sun and moon information"><span>DAYLIGHT</span><b><strong id="sunrise">—</strong>–<strong id="sunset">—</strong></b><small><strong id="moon-phase">—</strong> moon</small></div>
+      </div>
+    </section>
+    <section class="forecast" aria-labelledby="forecast-title">
+      <div class="forecast-heading">
+        <h2 id="forecast-title">Forecast</h2>
+        <label class="forecast-source" for="forecast-provider"><span>SOURCE</span><select id="forecast-provider" aria-label="Forecast source"></select></label>
+      </div>
+      <div id="forecast-cards" class="forecast-cards"></div>
+      <div id="forecast-attribution" class="forecast-attribution"></div>
+    </section>
+    <section class="history">
+      <div class="section-head"><div><p class="eyebrow">HISTORY</p><h2 id="chart-title">Outdoor temperature</h2></div><div class="ranges"><button data-hours="6">6H</button><button class="active" data-hours="24">24H</button><button data-hours="168">7D</button><button data-hours="720">30D</button><button data-hours="8760">1Y</button></div></div>
+      <div class="history-window-controls"><button id="history-prev" type="button">← Earlier</button><span id="history-window-label">Latest 24 hours</span><div><button id="history-now" type="button" hidden>Now</button><button id="history-next" type="button" disabled>Later →</button></div></div>
+      <div id="metric-picker" class="metric-picker" aria-label="Choose historical measurement"></div>
+      <div class="stats"><span><span id="low-label">LOW</span> <b id="low">—</b></span><span><span id="high-label">HIGH</span> <b id="high">—</b></span><span><span id="latest-label">CURRENT</span> <b id="latest-value">—</b></span></div>
+      <div class="chart-wrap"><canvas id="chart" role="img" tabindex="0" aria-label="Historical weather chart. Hover, drag, or use the arrow keys to inspect readings." aria-describedby="chart-readout"><div>Your browser does not support the historical weather chart.</div></canvas><div id="chart-readout" class="chart-readout" hidden><span id="chart-readout-time"></span><strong id="chart-readout-value"></strong></div><div id="empty">History will appear after readings arrive.</div></div>
+    </section>
+    <footer>
+      <div id="status" class="status waiting"><i></i><span>Waiting for station</span></div>
+      <div class="footer-meta"><span id="updated">No observations yet</span><span aria-hidden="true">·</span><span>Stored locally on your Raspberry Pi</span><span aria-hidden="true">·</span><span id="count">0 readings shown</span></div>
+    </footer>
+  </main>
+  <script src="/app.js?v=29"></script>
+  <script src="/forecast.js?v=12"></script>
+</body>
+</html>

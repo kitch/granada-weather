@@ -1,0 +1,15 @@
+[Unit]
+Description=Send Granada Weather data to TRMNL
+After=network-online.target pi-weather.service
+Wants=network-online.target
+Requires=pi-weather.service
+
+[Service]
+Type=oneshot
+User=jakekit
+EnvironmentFile=/etc/pi-weather.env
+Environment=TRMNL_FORECAST_PROVIDER=weatherkit
+ExecStart=/usr/bin/python3 /opt/pi-weather/trmnl_sender.py
+
+[Install]
+WantedBy=multi-user.target

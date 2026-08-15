@@ -1,0 +1,12 @@
+[Unit]
+Description=Update TRMNL from Granada Weather every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=15s
+Persistent=true
+Unit=pi-weather-trmnl.service
+
+[Install]
+WantedBy=timers.target
