@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#091512">
+  <title>Forecast Accuracy · Granada Weather</title>
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
+  <link rel="stylesheet" href="/app.css?v=28">
+  <link rel="stylesheet" href="/accuracy.css?v=1">
+</head>
+<body>
+  <main class="accuracy-page">
+    <header class="accuracy-header">
+      <a href="/">← Granada Weather</a>
+      <p class="eyebrow">FORECAST VERIFICATION</p>
+      <h1>Accuracy</h1>
+      <p class="accuracy-intro">Day-ahead forecasts measured against this weather station’s completed local days.</p>
+    </header>
+    <section class="accuracy-summary" aria-label="Scoring status">
+      <div><span>SCORED DAYS</span><strong id="scored-days">—</strong></div>
+      <div><span>OBSERVED THROUGH</span><strong id="observed-through">—</strong></div>
+      <div><span>LAST CALCULATED</span><strong id="accuracy-updated">—</strong></div>
+    </section>
+    <section class="accuracy-section" aria-labelledby="provider-title">
+      <div class="accuracy-section-head">
+        <div><p class="eyebrow">PROVIDERS</p><h2 id="provider-title">Scorecard</h2></div>
+        <p>Temperature and rainfall error: lower is better. Wet-day accuracy: higher is better.</p>
+      </div>
+      <div id="provider-scores" class="provider-scores" aria-live="polite"></div>
+    </section>
+    <section class="accuracy-section" aria-labelledby="daily-title">
+      <div class="accuracy-section-head">
+        <div><p class="eyebrow">DAY BY DAY</p><h2 id="daily-title">Recent results</h2></div>
+      </div>
+      <div id="daily-results" class="daily-results"></div>
+    </section>
+    <footer class="accuracy-footer"><p id="accuracy-method">Scores use the last forecast collected before local midnight.</p></footer>
+  </main>
+  <script src="/accuracy.js?v=1"></script>
+</body>
+</html>
+

@@ -30,6 +30,7 @@ LATEST = DATA_DIR / "latest.json"
 FORECAST = DATA_DIR / "forecast.json"
 FORECAST_DIR = DATA_DIR / "forecasts"
 FORECAST_PROVIDERS = FORECAST_DIR / "providers.json"
+FORECAST_ACCURACY = DATA_DIR / "forecast-accuracy.json"
 WEATHERKIT_ATTRIBUTION_LOGO = DATA_DIR / "weatherkit-attribution.png"
 ROLLUP_DIR = DATA_DIR / "hourly"
 WRITE_LOCK = threading.Lock()
@@ -303,6 +304,13 @@ def read_forecast_providers() -> dict:
 def public_forecast_providers() -> dict:
     providers = read_forecast_providers()
     return {"default": providers.get("default"), "providers": providers.get("providers", [])}
+
+
+def read_forecast_accuracy() -> dict:
+    try:
+        return json.loads(FORECAST_ACCURACY.read_text(encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"updated_at": None, "scored_days": 0, "providers": [], "days": []}
 
 
 def dated_files(start: float, end: float) -> list[Path]:
@@ -648,6 +656,8 @@ class Handler(BaseHTTPRequestHandler):
             self.json_response(read_forecast(query.get("provider", [None])[-1]) or {})
         elif parsed.path == "/api/forecast/providers":
             self.json_response(public_forecast_providers())
+        elif parsed.path == "/api/forecast/accuracy":
+            self.json_response(read_forecast_accuracy())
         elif parsed.path == "/api/forecast/attribution-logo":
             self.serve_weatherkit_logo()
         elif parsed.path == "/api/health":
@@ -717,7 +727,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def serve_static(self, path: str) -> None:
         names = {"/": ("index.html", "text/html; charset=utf-8"),
+                 "/accuracy": ("accuracy.html", "text/html; charset=utf-8"),
+                 "/accuracy.html": ("accuracy.html", "text/html; charset=utf-8"),
                  "/app.css": ("app.css", "text/css; charset=utf-8"),
+                 "/accuracy.css": ("accuracy.css", "text/css; charset=utf-8"),
                  "/buttons.css": ("buttons.css", "text/css; charset=utf-8"),
                  "/forecast.css": ("forecast.css", "text/css; charset=utf-8"),
                  "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -727,6 +740,7 @@ class Handler(BaseHTTPRequestHandler):
                  "/icon-512.png": ("icon-512.png", "image/png"),
                  "/favicon.png": ("favicon.png", "image/png")}
         names["/forecast.js"] = ("forecast.js", "text/javascript; charset=utf-8")
+        names["/accuracy.js"] = ("accuracy.js", "text/javascript; charset=utf-8")
         item = names.get(path)
         if not item:
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -759,13 +773,15 @@ class PublicHandler(Handler):
             self.json_response(read_forecast(query.get("provider", [None])[-1]) or {})
         elif parsed.path == "/api/forecast/providers":
             self.json_response(public_forecast_providers())
+        elif parsed.path == "/api/forecast/accuracy":
+            self.json_response(read_forecast_accuracy())
         elif parsed.path == "/api/forecast/attribution-logo":
             self.serve_weatherkit_logo()
         elif parsed.path == "/api/health":
             latest = read_latest()
             self.json_response({"ok": True, "has_data": bool(latest)})
         elif parsed.path in {
-            "/", "/app.css", "/buttons.css", "/forecast.css", "/app.js", "/forecast.js",
+            "/", "/accuracy", "/accuracy.html", "/app.css", "/accuracy.css", "/buttons.css", "/forecast.css", "/app.js", "/forecast.js", "/accuracy.js",
             "/manifest.webmanifest", "/apple-touch-icon.png", "/icon-192.png", "/icon-512.png", "/favicon.png",
         }:
             self.serve_static(parsed.path)

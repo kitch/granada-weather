@@ -524,6 +524,17 @@ footer .status {
   margin-bottom: 10px;
 }
 
+.accuracy-link {
+  display: block;
+  width: max-content;
+  margin-top: 10px;
+  color: var(--mint);
+  font: 600 12px system-ui, sans-serif;
+  text-decoration: none;
+}
+
+.accuracy-link:hover { text-decoration: underline; }
+
 .footer-meta {
   display: flex;
   justify-content: center;

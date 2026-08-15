@@ -11,6 +11,7 @@ forward data to Weather Underground and TRMNL.
 ```text
 server.py                 Receiver, APIs, history storage, and web server
 forecast_collector.py     Forecast collection and forecast-history archive
+accuracy_collector.py     Daily forecast verification against observations
 trmnl_sender.py           Optional TRMNL sender
 static/                   Dashboard and PWA assets
 systemd/                  Production services and timers
@@ -33,6 +34,11 @@ uses standard Linux locations:
 Keeping these separate allows code updates without touching historical data or
 credentials. The running Granada Weather installation continues to use these
 locations; this checkout is the source used to prepare deployments.
+
+The accuracy collector runs once daily. It stores completed local-day station
+summaries alongside forecast history in SQLite and publishes a replaceable JSON
+scorecard for the read-only API. It uses the last forecast collected before each
+local day began, preventing same-day updates from improving a provider's result.
 
 ## Local smoke test
 
@@ -64,4 +70,3 @@ the `jakekit` account. Change the `User=` entries when installing on another Pi.
 Deploy application files from this repository into `/opt/pi-weather`; never copy
 runtime data or credentials into the repository. Back up `/var/lib/pi-weather`
 and `/etc/pi-weather*` separately as private disaster-recovery material.
-
