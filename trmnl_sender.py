@@ -52,7 +52,9 @@ def safe(value, suffix: str = "", digits: int | None = None) -> str:
     if value is None or value == "":
         return "—"
     if digits is not None:
-        value = f"{float(value):.{digits}f}".rstrip("0").rstrip(".")
+        value = f"{float(value):.{digits}f}"
+        if digits > 0:
+            value = value.rstrip("0").rstrip(".")
     return f"{value}{suffix}"
 
 
