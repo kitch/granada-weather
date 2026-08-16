@@ -1,6 +1,6 @@
 import unittest
 
-from trmnl_sender import safe
+from trmnl_sender import merge_variables, safe
 
 
 class SafeFormattingTests(unittest.TestCase):
@@ -15,6 +15,35 @@ class SafeFormattingTests(unittest.TestCase):
     def test_zero_and_missing_values(self):
         self.assertEqual(safe(0, " mph", 1), "0 mph")
         self.assertEqual(safe(None, "°", 1), "—")
+
+
+class MergeVariableTests(unittest.TestCase):
+    def test_payload_contract_formats_weather_and_forecast_values(self):
+        weather = {
+            "outdoor_temp_f": 80, "outdoor_humidity_pct": 90,
+            "indoor_temp_f": 70, "indoor_humidity_pct": 50,
+            "pressure_relative_inhg": 30, "rain_hour_in": 0.01,
+            "rain_daily_in": 0.2, "wind_speed_mph": 5, "wind_gust_mph": 10,
+        }
+        outlook = {
+            "today_high": 90, "today_low": 70, "today_rain_in": 0.1,
+            "today_rain_chance": 100, "today_sunrise": "6:30 AM", "today_sunset": "8:00 PM",
+            "tomorrow_high": 100, "tomorrow_low": 80, "tomorrow_rain_in": 0,
+            "tomorrow_rain_chance": 0,
+        }
+        payload = merge_variables(weather, outlook)
+        self.assertEqual(payload["outdoor_humidity"], "90%")
+        self.assertEqual(payload["today_high"], "90°")
+        self.assertEqual(payload["tomorrow_high"], "100°")
+        self.assertEqual(payload["today_rain_chance"], "100%")
+        self.assertEqual(payload["pressure"], "1015.9 mbar")
+        self.assertEqual(payload["today_sunrise"], "6:30 AM")
+
+    def test_missing_values_use_display_placeholder(self):
+        payload = merge_variables({}, {})
+        self.assertEqual(payload["outdoor_temp"], "—")
+        self.assertEqual(payload["pressure"], "—")
+        self.assertEqual(payload["today_high"], "—")
 
 
 if __name__ == "__main__":

@@ -65,6 +65,19 @@ WeatherKit private keys belong under `/etc/pi-weather/`, not in this repository.
 The checked-in systemd units reflect the current Raspberry Pi deployment and use
 the `jakekit` account. Change the `User=` entries when installing on another Pi.
 
+## Tests
+
+The server-side suite uses only Python's standard library and covers station
+authentication and normalization, public API security, rainfall counters and
+rollups, forecast-provider normalization, local-date accuracy scoring, and the
+TRMNL payload contract.
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+GitHub Actions runs the same suite automatically on pushes and pull requests.
+
 ## Deployment rule
 
 Deploy application files from this repository into `/opt/pi-weather`; never copy
