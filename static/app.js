@@ -18,7 +18,7 @@ const metrics = {
   solar_radiation_wm2: {label: 'Solar radiation', short: 'Solar', unit: 'W/m²', group: 'Atmosphere', digits: 0},
   uv_index: {label: 'UV index', short: 'UV', unit: '', group: 'Atmosphere', digits: 0},
   pressure_relative_inhg: {label: 'Pressure', short: 'Pressure', unit: 'hPa', group: 'Atmosphere', digits: 0},
-  rain_rate_in_hr: {label: 'Rain rate', short: 'Rain rate', unit: 'in/hr', group: 'Rain', digits: 2, legacy: 'rain_hour_in'},
+  rain_rate_in_hr: {label: 'Rain rate', short: 'Rain rate', unit: 'in/hr', group: 'Rain', digits: 2, legacy: 'rain_hour_in', zeroBased: true, minUpper: 0.1},
   rainfall_in: {label: 'Rainfall', short: 'Rainfall', unit: 'in', group: 'Rain', digits: 3, bars: true},
   wind_direction_deg: {label: 'Wind direction', short: 'Direction', unit: '°', group: 'Wind', digits: 0, detail: true, history: false},
   rain_hour_in: {label: 'Rain this hour', short: 'Hourly rain', unit: 'in', group: 'Rain', digits: 3, legacy: 'rainin', history: false},
@@ -349,7 +349,7 @@ function draw() {
       const value = source == null || source === '' ? NaN : Number(source);
       return {x: start + (metric.bars ? duration / 2 : 0), start, duration, y: value, note: apparent?.detail};
     })
-    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y))
+    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y) && (!metric.zeroBased || point.y >= 0))
     .sort((a, b) => a.x - b.x);
   $('#empty').style.display = points.length ? 'none' : 'grid';
   context.clearRect(0, 0, rectangle.width, rectangle.height);
@@ -366,8 +366,12 @@ function draw() {
   const minimum = metric.bars ? 0 : Math.min(...values, ...rangeValues.map(range => Number(range[0])));
   const maximum = Math.max(...values, ...rangeValues.map(range => Number(range[1])));
   const padding = Math.max(metric.binary ? 0.5 : metric.unit === 'in' ? 0.01 : 1, (maximum - minimum) * 0.15);
-  const lower = metric.bars ? 0 : metric.binary ? -0.15 : minimum - padding;
-  const upper = metric.bars ? Math.max(0.01, maximum * 1.18) : metric.binary ? 1.15 : maximum + padding;
+  const lower = metric.bars || metric.zeroBased ? 0 : metric.binary ? -0.15 : minimum - padding;
+  const upper = metric.bars
+    ? Math.max(0.01, maximum * 1.18)
+    : metric.zeroBased
+      ? Math.max(metric.minUpper || 1, maximum * 1.18)
+      : metric.binary ? 1.15 : maximum + padding;
   const width = rectangle.width;
   const height = rectangle.height - 28;
   const requestedEnd = (historyEnd || new Date()).getTime();
