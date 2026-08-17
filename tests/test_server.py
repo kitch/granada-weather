@@ -39,6 +39,12 @@ class StationInputTests(unittest.TestCase):
         self.assertNotIn("pressure_relative_inhg", reading)
         self.assertNotIn("uv_index", reading)
 
+    def test_ws2000_rainin_is_normalized_as_rate(self):
+        reading = server.normalize({"rainin": "0.165", "dailyrainin": "0.028"})
+        self.assertEqual(reading["rain_rate_in_hr"], 0.165)
+        self.assertEqual(reading["rain_daily_in"], 0.028)
+        self.assertNotIn("rain_hour_in", reading)
+
     def test_public_reading_uses_allowlist(self):
         public = server.public_reading({
             "outdoor_temp_f": 75, "indoor_temp_f": 70, "battery_low": 1,
@@ -66,6 +72,23 @@ class RainStorageTests(unittest.TestCase):
                 reset = json.loads((root / "latest.json").read_text())
             self.assertAlmostEqual(second["rain_increment_in"], 0.1)
             self.assertEqual(reset["rain_increment_in"], 0.05)
+
+    def test_store_derives_last_hour_from_counter_increments(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            with patch.object(server, "DATA_DIR", root), patch.object(server, "LATEST", root / "latest.json"):
+                server.store({"observed_at": "2026-08-16T10:00:00+00:00", "rain_yearly_in": 1.0})
+                server.store({
+                    "observed_at": "2026-08-16T10:01:00+00:00", "rain_yearly_in": 1.008,
+                    "rain_rate_in_hr": 0.047,
+                })
+                server.store({
+                    "observed_at": "2026-08-16T10:03:00+00:00", "rain_yearly_in": 1.028,
+                    "rain_rate_in_hr": 0.165,
+                })
+                latest = json.loads((root / "latest.json").read_text())
+            self.assertEqual(latest["rain_rate_in_hr"], 0.165)
+            self.assertAlmostEqual(latest["rain_hour_in"], 0.028)
 
     def test_rainfall_bars_sum_raw_increments(self):
         start = datetime(2026, 8, 16, 12, tzinfo=timezone.utc).timestamp()

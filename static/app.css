@@ -851,7 +851,10 @@ footer .status {
   .editorial-notes b { font-size: 22px; }
 
   .detail-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "wind rain"
+      "sun sky";
+    grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
   }
 
   .detail-grid > div {
@@ -859,13 +862,26 @@ footer .status {
     padding: 12px;
   }
 
-  .detail-grid > div:nth-child(3) {
-    border-top: 1px solid var(--line);
-    border-left: 0;
+  .rain-detail {
+    grid-area: rain;
+    border-left: 1px solid var(--line);
   }
 
-  .detail-grid > div:nth-child(4) {
+  .wind-detail {
+    grid-area: wind;
+    border-left: 0 !important;
+  }
+
+  .sun-detail {
+    grid-area: sun;
     border-top: 1px solid var(--line);
+    border-left: 0 !important;
+  }
+
+  .sky-detail {
+    grid-area: sky;
+    border-top: 1px solid var(--line);
+    border-left: 1px solid var(--line);
   }
 
   .sky-detail b { font-size: 17px; }

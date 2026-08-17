@@ -105,7 +105,10 @@ ALIASES = {
     "uv": "uv_index",
     "dewptf": "dew_point_f",
     "windchillf": "wind_chill_f",
-    "rainin": "rain_hour_in",
+    # The WS-2000's Wunderground-compatible upload uses rainin as a recent
+    # rainfall rate, not a true rolling-hour accumulation. Preserve it as a
+    # rate and derive rain_hour_in from the cumulative counter in store().
+    "rainin": "rain_rate_in_hr",
     "lowbatt": "battery_low",
 }
 
@@ -194,6 +197,17 @@ def store(reading: dict) -> None:
         if isinstance(current_total, (int, float)) and isinstance(previous_total, (int, float)):
             delta = current_total - previous_total
             reading["rain_increment_in"] = round(delta if delta >= 0 else current_total, 4)
+        try:
+            observed = datetime.fromisoformat(reading["observed_at"]).timestamp()
+            recent = read_raw_range(observed - 3600, observed)
+        except (KeyError, ValueError):
+            recent = []
+        increments = [row.get("rain_increment_in") for row in recent]
+        increments.append(reading.get("rain_increment_in"))
+        reading["rain_hour_in"] = round(sum(
+            float(value) for value in increments
+            if isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
+        ), 4)
         day = reading["observed_at"][:10]
         line = json.dumps(reading, separators=(",", ":"), sort_keys=True)
         with (DATA_DIR / f"{day}.ndjson").open("a", encoding="utf-8") as handle:
