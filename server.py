@@ -197,6 +197,7 @@ def store(reading: dict) -> None:
         if isinstance(current_total, (int, float)) and isinstance(previous_total, (int, float)):
             delta = current_total - previous_total
             reading["rain_increment_in"] = round(delta if delta >= 0 else current_total, 4)
+        observed = None
         try:
             observed = datetime.fromisoformat(reading["observed_at"]).timestamp()
             recent = read_raw_range(observed - 3600, observed)
@@ -204,10 +205,17 @@ def store(reading: dict) -> None:
             recent = []
         increments = [row.get("rain_increment_in") for row in recent]
         increments.append(reading.get("rain_increment_in"))
-        reading["rain_hour_in"] = round(sum(
+        rain_hour = sum(
             float(value) for value in increments
             if isinstance(value, (int, float)) and math.isfinite(value) and value >= 0
-        ), 4)
+        )
+        daily_rain = reading.get("rain_daily_in")
+        if observed is not None and isinstance(daily_rain, (int, float)) and math.isfinite(daily_rain):
+            cutoff_day = datetime.fromtimestamp(observed - 3600, LOCAL_TIME).date()
+            observed_day = datetime.fromtimestamp(observed, LOCAL_TIME).date()
+            if cutoff_day == observed_day:
+                rain_hour = min(rain_hour, float(daily_rain))
+        reading["rain_hour_in"] = round(rain_hour, 4)
         day = reading["observed_at"][:10]
         line = json.dumps(reading, separators=(",", ":"), sort_keys=True)
         with (DATA_DIR / f"{day}.ndjson").open("a", encoding="utf-8") as handle:

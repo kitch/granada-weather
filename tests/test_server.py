@@ -77,14 +77,17 @@ class RainStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             root = Path(root)
             with patch.object(server, "DATA_DIR", root), patch.object(server, "LATEST", root / "latest.json"):
-                server.store({"observed_at": "2026-08-16T10:00:00+00:00", "rain_yearly_in": 1.0})
                 server.store({
-                    "observed_at": "2026-08-16T10:01:00+00:00", "rain_yearly_in": 1.008,
-                    "rain_rate_in_hr": 0.047,
+                    "observed_at": "2026-08-16T10:00:00+00:00", "rain_yearly_in": 1.0,
+                    "rain_daily_in": 0,
                 })
                 server.store({
-                    "observed_at": "2026-08-16T10:03:00+00:00", "rain_yearly_in": 1.028,
-                    "rain_rate_in_hr": 0.165,
+                    "observed_at": "2026-08-16T10:01:00+00:00", "rain_yearly_in": 1.008,
+                    "rain_daily_in": 0.008, "rain_rate_in_hr": 0.047,
+                })
+                server.store({
+                    "observed_at": "2026-08-16T10:03:00+00:00", "rain_yearly_in": 1.029,
+                    "rain_daily_in": 0.028, "rain_rate_in_hr": 0.165,
                 })
                 latest = json.loads((root / "latest.json").read_text())
             self.assertEqual(latest["rain_rate_in_hr"], 0.165)
