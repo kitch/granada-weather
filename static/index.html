@@ -11,7 +11,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png">
-  <link rel="stylesheet" href="/app.css?v=29">
+  <link rel="stylesheet" href="/app.css?v=30">
   <link rel="stylesheet" href="/buttons.css?v=8">
   <link rel="stylesheet" href="/forecast.css?v=10">
 </head>
@@ -34,6 +34,7 @@
       </div>
       <div class="detail-grid">
         <div class="split-detail rain-detail">
+          <small id="rain-rate-current" class="rain-rate-current" hidden></small>
           <div><p><small>LAST HOUR RAIN</small><b><strong id="rain-hour">—</strong><em>in</em></b></p><p><small>TODAY RAIN</small><b><strong id="rain-today">—</strong><em>in</em></b></p></div>
         </div>
         <div class="wind-detail"><span>WIND</span><b><strong id="wind-speed">—</strong><small>mph</small> <strong id="wind-direction">—</strong></b></div>
@@ -64,7 +65,7 @@
       <div class="footer-meta"><span id="updated">No observations yet</span><span aria-hidden="true">·</span><span>Stored locally on your Raspberry Pi</span><span aria-hidden="true">·</span><span id="count">0 readings shown</span></div>
     </footer>
   </main>
-  <script src="/app.js?v=29"></script>
+  <script src="/app.js?v=30"></script>
   <script src="/forecast.js?v=12"></script>
 </body>
 </html>

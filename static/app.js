@@ -18,6 +18,7 @@ const metrics = {
   solar_radiation_wm2: {label: 'Solar radiation', short: 'Solar', unit: 'W/m²', group: 'Atmosphere', digits: 0},
   uv_index: {label: 'UV index', short: 'UV', unit: '', group: 'Atmosphere', digits: 0},
   pressure_relative_inhg: {label: 'Pressure', short: 'Pressure', unit: 'hPa', group: 'Atmosphere', digits: 0},
+  rain_rate_in_hr: {label: 'Rain rate', short: 'Rain rate', unit: 'in/hr', group: 'Rain', digits: 2, legacy: 'rain_hour_in'},
   rainfall_in: {label: 'Rainfall', short: 'Rainfall', unit: 'in', group: 'Rain', digits: 3, bars: true},
   wind_direction_deg: {label: 'Wind direction', short: 'Direction', unit: '°', group: 'Wind', digits: 0, detail: true, history: false},
   rain_hour_in: {label: 'Rain this hour', short: 'Hourly rain', unit: 'in', group: 'Rain', digits: 3, legacy: 'rainin', history: false},
@@ -146,6 +147,12 @@ function renderCurrent() {
   $('#humidity').textContent = val(raw(current, 'outdoor_humidity_pct'), metrics.outdoor_humidity_pct);
   $('#rain-hour').textContent = val(raw(current, 'rain_hour_in'), metrics.rain_hour_in);
   $('#rain-today').textContent = val(raw(current, 'rain_daily_in'), metrics.rain_daily_in);
+  const rainRate = Number(raw(current, 'rain_rate_in_hr'));
+  const rainRateCurrent = $('#rain-rate-current');
+  rainRateCurrent.hidden = !Number.isFinite(rainRate) || rainRate <= 0;
+  rainRateCurrent.textContent = rainRateCurrent.hidden
+    ? ''
+    : `FALLING AT ${val(rainRate, metrics.rain_rate_in_hr)} IN/HR`;
   $('#wind-speed').textContent = val(raw(current, 'wind_speed_mph'), metrics.wind_speed_mph);
   $('#wind-direction').textContent = cardinal(raw(current, 'wind_direction_deg'));
   $('#uv-index').textContent = val(raw(current, 'uv_index'), metrics.uv_index);

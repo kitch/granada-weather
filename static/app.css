@@ -753,6 +753,22 @@ footer .status {
   align-items: flex-end;
 }
 
+.rain-detail {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.rain-rate-current {
+  color: var(--mint);
+  font: 500 9px/1.2 system-ui, sans-serif;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+
+.rain-rate-current[hidden] { display: none; }
+
 .split-detail > div {
   display: grid;
   grid-template-columns: 1fr 1fr;
