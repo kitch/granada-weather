@@ -45,6 +45,49 @@ class StationInputTests(unittest.TestCase):
         self.assertEqual(reading["rain_daily_in"], 0.028)
         self.assertNotIn("rain_hour_in", reading)
 
+    def test_out_of_range_weather_values_are_discarded(self):
+        reading = server.normalize({
+            "tempf": "-9999", "humidity": "101", "tempinf": "72",
+            "dewptf": "-121", "baromrelin": "19.9", "baromabsin": "35.1",
+            "windspeedmph": "-1", "windgustmph": "201", "winddir": "361",
+            "rainin": "-0.1", "dailyrainin": "101", "yearlyrainin": "1001",
+            "solarradiation": "2001", "uv": "31",
+        })
+        self.assertEqual(reading["indoor_temp_f"], 72)
+        for field in server.FIELD_RANGES:
+            if field != "indoor_temp_f":
+                self.assertNotIn(field, reading)
+
+    def test_valid_boundary_values_are_retained(self):
+        reading = server.normalize({
+            "tempf": "-100", "humidity": "100", "baromrelin": "20",
+            "yearlyrainin": "1000", "winddir": "360", "uv": "0",
+        })
+        self.assertEqual(reading["outdoor_temp_f"], -100)
+        self.assertEqual(reading["outdoor_humidity_pct"], 100)
+        self.assertEqual(reading["pressure_relative_inhg"], 20)
+        self.assertEqual(reading["rain_yearly_in"], 1000)
+        self.assertEqual(reading["wind_direction_deg"], 360)
+        self.assertEqual(reading["uv_index"], 0)
+
+    def test_unusable_packet_is_not_stored_or_forwarded(self):
+        with patch.object(server, "store") as store, patch.object(server, "enqueue_wunderground") as forward:
+            accepted = server.process_station_fields({
+                "tempf": "-9999", "humidity": "-9999", "baromrelin": "-9999",
+                "yearlyrainin": "-9999",
+            })
+        self.assertFalse(accepted)
+        store.assert_not_called()
+        forward.assert_not_called()
+
+    def test_usable_packet_is_stored_and_forwarded(self):
+        fields = {"tempf": "72", "humidity": "50", "baromrelin": "29.9", "yearlyrainin": "1.2"}
+        with patch.object(server, "store") as store, patch.object(server, "enqueue_wunderground") as forward:
+            accepted = server.process_station_fields(fields)
+        self.assertTrue(accepted)
+        store.assert_called_once()
+        forward.assert_called_once_with(store.call_args.args[0])
+
     def test_public_reading_uses_allowlist(self):
         public = server.public_reading({
             "outdoor_temp_f": 75, "indoor_temp_f": 70, "battery_low": 1,

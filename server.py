@@ -113,6 +113,31 @@ ALIASES = {
 }
 
 NUMERIC_FIELDS = set(ALIASES.values()) | {"realtime", "rtfreq"}
+FIELD_RANGES = {
+    "outdoor_temp_f": (-100, 160),
+    "indoor_temp_f": (-20, 160),
+    "outdoor_humidity_pct": (0, 100),
+    "indoor_humidity_pct": (0, 100),
+    "dew_point_f": (-120, 160),
+    "wind_chill_f": (-150, 160),
+    "pressure_relative_inhg": (20, 35),
+    "pressure_absolute_inhg": (20, 35),
+    "wind_speed_mph": (0, 200),
+    "wind_gust_mph": (0, 200),
+    "wind_direction_deg": (0, 360),
+    "rain_rate_in_hr": (0, 30),
+    "rain_hour_in": (0, 30),
+    "rain_daily_in": (0, 100),
+    "rain_weekly_in": (0, 500),
+    "rain_monthly_in": (0, 500),
+    "rain_yearly_in": (0, 1000),
+    "solar_radiation_wm2": (0, 2000),
+    "uv_index": (0, 30),
+    "battery_low": (0, 1),
+}
+REQUIRED_WEATHER_FIELDS = {
+    "outdoor_temp_f", "outdoor_humidity_pct", "pressure_relative_inhg", "rain_yearly_in",
+}
 STATION_ID_FIELDS = ("id", "stationid", "station_id")
 STATION_KEY_FIELDS = ("password", "passkey", "stationkey", "station_key")
 SECURITY_HEADERS = {
@@ -150,6 +175,11 @@ def number(value: str):
     return int(parsed) if parsed.is_integer() else parsed
 
 
+def numeric_value_valid(field: str, value: int | float) -> bool:
+    bounds = FIELD_RANGES.get(field)
+    return bounds is None or bounds[0] <= value <= bounds[1]
+
+
 def station_credentials_valid(fields: dict[str, str]) -> bool:
     expected_id = os.environ.get("WEATHER_STATION_ID", "")
     expected_key = os.environ.get("WEATHER_STATION_KEY", "")
@@ -181,11 +211,28 @@ def normalize(fields: dict[str, str]) -> dict:
         normalized_key = ALIASES.get(clean_key, clean_key)
         if normalized_key in NUMERIC_FIELDS:
             parsed_number = number(value)
-            if parsed_number is not None:
+            if parsed_number is not None and numeric_value_valid(normalized_key, parsed_number):
                 reading[normalized_key] = parsed_number
         else:
             reading[normalized_key] = scalar(value)
     return reading
+
+
+def reading_is_usable(reading: dict) -> bool:
+    return all(
+        isinstance(reading.get(field), (int, float)) and math.isfinite(reading[field])
+        for field in REQUIRED_WEATHER_FIELDS
+    )
+
+
+def process_station_fields(fields: dict[str, str]) -> bool:
+    reading = normalize(fields)
+    if not reading_is_usable(reading):
+        print(f"Discarded unusable station packet at {reading['received_at']}")
+        return False
+    store(reading)
+    enqueue_wunderground(reading)
+    return True
 
 
 def store(reading: dict) -> None:
@@ -662,9 +709,7 @@ class Handler(BaseHTTPRequestHandler):
             if not station_credentials_valid(fields):
                 self.json_response({"error": "invalid station credentials"}, HTTPStatus.FORBIDDEN)
                 return
-            reading = normalize(fields)
-            store(reading)
-            enqueue_wunderground(reading)
+            process_station_fields(fields)
             self.send_response(HTTPStatus.NO_CONTENT)
             self.end_headers()
         elif parsed.path == "/api/current":
@@ -719,9 +764,7 @@ class Handler(BaseHTTPRequestHandler):
             if not station_credentials_valid(fields):
                 self.json_response({"error": "invalid station credentials"}, HTTPStatus.FORBIDDEN)
                 return
-            reading = normalize(fields)
-            store(reading)
-            enqueue_wunderground(reading)
+            process_station_fields(fields)
             self.send_response(HTTPStatus.NO_CONTENT)
             self.end_headers()
         except (UnicodeDecodeError, json.JSONDecodeError, AttributeError):
