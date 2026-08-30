@@ -13,6 +13,15 @@ function forecastDetail(label, value) {
   return item;
 }
 
+function forecastDewPoint(data, prefix) {
+  const morning = data[`${prefix}_dew_point_am_f`];
+  const afternoon = data[`${prefix}_dew_point_pm_f`];
+  if (morning == null && afternoon == null) return '—';
+  if (morning == null) return `PM ${forecastValue(afternoon, '°')}`;
+  if (afternoon == null) return `AM ${forecastValue(morning, '°')}`;
+  return `AM ${forecastValue(morning, '°')} → PM ${forecastValue(afternoon, '°')}`;
+}
+
 function forecastCard(label, data, prefix) {
   const article = forecastElement('article', 'forecast-card');
   const header = forecastElement('header');
@@ -31,8 +40,11 @@ function forecastCard(label, data, prefix) {
   if (prefix === 'today') details.classList.add('today-details');
   details.append(
     forecastDetail('RAIN CHANCE', forecastValue(data[`${prefix}_rain_chance`], '%')),
-    forecastDetail('RAIN TOTAL', forecastValue(data[`${prefix}_rain_in`], ' in'))
+    forecastDetail('RAIN TOTAL', forecastValue(data[`${prefix}_rain_in`], ' in')),
   );
+  const dewPoint = forecastDetail('DEW POINT', forecastDewPoint(data, prefix));
+  dewPoint.classList.add('forecast-dew-point');
+  details.append(dewPoint);
   if (prefix !== 'today') {
     details.classList.add('tomorrow-details');
   }

@@ -70,9 +70,23 @@ def cached_forecast() -> dict:
 def empty_forecast() -> dict:
     return {
         "today_high": None, "today_low": None, "today_rain_in": None, "today_rain_chance": None,
+        "today_dew_point_am_f": None, "today_dew_point_pm_f": None,
         "today_sunrise": "—", "today_sunset": "—", "tomorrow_high": None, "tomorrow_low": None,
         "tomorrow_rain_in": None, "tomorrow_rain_chance": None,
+        "tomorrow_dew_point_am_f": None, "tomorrow_dew_point_pm_f": None,
     }
+
+
+def dew_point_summary(outlook: dict, prefix: str) -> str:
+    morning = outlook.get(f"{prefix}_dew_point_am_f")
+    afternoon = outlook.get(f"{prefix}_dew_point_pm_f")
+    if morning is None and afternoon is None:
+        return "—"
+    if morning is None:
+        return f"PM {safe(afternoon, '°', 1)}"
+    if afternoon is None:
+        return f"AM {safe(morning, '°', 1)}"
+    return f"AM {safe(morning, '°', 1)} → PM {safe(afternoon, '°', 1)}"
 
 
 def merge_variables(weather: dict, outlook: dict) -> dict[str, str]:
@@ -83,6 +97,7 @@ def merge_variables(weather: dict, outlook: dict) -> dict[str, str]:
         "outdoor_temp": safe(weather.get("outdoor_temp_f"), "°", 1),
         "indoor_humidity": safe(weather.get("indoor_humidity_pct"), "%", 0),
         "outdoor_humidity": safe(weather.get("outdoor_humidity_pct"), "%", 0),
+        "outdoor_dew_point": safe(weather.get("dew_point_f"), "°", 1),
         "co2": "—", "air_quality": "—", "noise": "—",
         "pressure": safe(pressure_mbar, " mbar", 1),
         "rain_1h": safe(weather.get("rain_hour_in"), " in", 3),
@@ -93,8 +108,14 @@ def merge_variables(weather: dict, outlook: dict) -> dict[str, str]:
         "today_low": safe(outlook.get("today_low"), "°", 0),
         "today_rain_in": safe(outlook.get("today_rain_in"), " in"),
         "today_rain_chance": safe(outlook.get("today_rain_chance"), "%", 0),
+        "today_dew_point_am": safe(outlook.get("today_dew_point_am_f"), "°", 1),
+        "today_dew_point_pm": safe(outlook.get("today_dew_point_pm_f"), "°", 1),
+        "today_dew_point": dew_point_summary(outlook, "today"),
         "tomorrow_rain_in": safe(outlook.get("tomorrow_rain_in"), " in"),
         "tomorrow_rain_chance": safe(outlook.get("tomorrow_rain_chance"), "%", 0),
+        "tomorrow_dew_point_am": safe(outlook.get("tomorrow_dew_point_am_f"), "°", 1),
+        "tomorrow_dew_point_pm": safe(outlook.get("tomorrow_dew_point_pm_f"), "°", 1),
+        "tomorrow_dew_point": dew_point_summary(outlook, "tomorrow"),
         "today_sunrise": outlook.get("today_sunrise", "—"),
         "today_sunset": outlook.get("today_sunset", "—"),
         "tomorrow_high": safe(outlook.get("tomorrow_high"), "°", 0),

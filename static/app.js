@@ -144,7 +144,7 @@ function renderCurrent() {
   $('#temp').textContent = val(raw(current, 'outdoor_temp_f'), metrics.outdoor_temp_f);
   $('#apparent-temp').hidden = !Number.isFinite(apparent.value);
   $('#apparent-temp').textContent = Number.isFinite(apparent.value) ? `${apparent.label} ${val(apparent.value, metrics.outdoor_temp_f)}°F` : '';
-  $('#humidity').textContent = val(raw(current, 'outdoor_humidity_pct'), metrics.outdoor_humidity_pct);
+  $('#dew-point').textContent = val(raw(current, 'dew_point_f'), metrics.dew_point_f);
   $('#rain-hour').textContent = val(raw(current, 'rain_hour_in'), metrics.rain_hour_in);
   $('#rain-today').textContent = val(raw(current, 'rain_daily_in'), metrics.rain_daily_in);
   const rainRate = Number(raw(current, 'rain_rate_in_hr'));
