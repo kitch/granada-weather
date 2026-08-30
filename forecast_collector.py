@@ -17,6 +17,7 @@ import urllib.parse
 import urllib.request
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
+from statistics import median
 from zoneinfo import ZoneInfo
 
 
@@ -139,6 +140,40 @@ def local_time(value) -> str:
     return parsed.strftime("%-I:%M %p")
 
 
+def forecast_time(value) -> datetime:
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, timezone.utc).astimezone(LOCAL_ZONE)
+    parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=LOCAL_ZONE)
+    return parsed.astimezone(LOCAL_ZONE)
+
+
+def dew_point_windows(samples: list[tuple[object, object]], converter=lambda value: value) -> dict[str, dict[str, float]]:
+    grouped: dict[str, dict[str, list[float]]] = {}
+    for timestamp, raw_value in samples:
+        value = finite(converter(raw_value))
+        if value is None:
+            continue
+        try:
+            local = forecast_time(timestamp)
+        except (TypeError, ValueError, OSError):
+            continue
+        period = "dew_point_am_f" if 6 <= local.hour <= 10 else "dew_point_pm_f" if 14 <= local.hour <= 18 else None
+        if period:
+            grouped.setdefault(local.date().isoformat(), {}).setdefault(period, []).append(value)
+    return {
+        valid_date: {period: round(median(values), 1) for period, values in periods.items()}
+        for valid_date, periods in grouped.items()
+    }
+
+
+def apply_dew_points(rows: list[dict], windows: dict[str, dict[str, float]]) -> list[dict]:
+    for row in rows:
+        row.update(windows.get(row["date"], {}))
+    return rows
+
+
 def words(value: str | None) -> str:
     if not value:
         return "Forecast"
@@ -224,7 +259,8 @@ def apply_astronomy(forecast: dict, astronomy: dict) -> dict:
 
 
 def daily_row(valid_date: str, high=None, low=None, rain_chance=None, rain_in=None,
-              summary="Forecast", sunrise=None, sunset=None, moon_phase=None) -> dict:
+              summary="Forecast", sunrise=None, sunset=None, moon_phase=None,
+              dew_point_am=None, dew_point_pm=None) -> dict:
     day = date.fromisoformat(valid_date)
     return {
         "date": valid_date,
@@ -232,6 +268,8 @@ def daily_row(valid_date: str, high=None, low=None, rain_chance=None, rain_in=No
         "low_f": round_or_none(low, 1),
         "rain_chance_pct": round_or_none(rain_chance, 0),
         "rain_in": round_or_none(rain_in, 3),
+        "dew_point_am_f": round_or_none(dew_point_am, 1),
+        "dew_point_pm_f": round_or_none(dew_point_pm, 1),
         "summary": summary or "Forecast",
         "sunrise": local_time(sunrise),
         "sunset": local_time(sunset),
@@ -255,6 +293,8 @@ def format_cache(provider: str, issued_at: str, rows: list[dict], attribution: d
         "today_low": first.get("low_f"),
         "today_rain_in": first.get("rain_in"),
         "today_rain_chance": first.get("rain_chance_pct"),
+        "today_dew_point_am_f": first.get("dew_point_am_f"),
+        "today_dew_point_pm_f": first.get("dew_point_pm_f"),
         "today_sunrise": first.get("sunrise", "—"),
         "today_sunset": first.get("sunset", "—"),
         "today_moon_phase": first.get("moon_phase", "—"),
@@ -263,6 +303,8 @@ def format_cache(provider: str, issued_at: str, rows: list[dict], attribution: d
         "tomorrow_low": second.get("low_f"),
         "tomorrow_rain_in": second.get("rain_in"),
         "tomorrow_rain_chance": second.get("rain_chance_pct"),
+        "tomorrow_dew_point_am_f": second.get("dew_point_am_f"),
+        "tomorrow_dew_point_pm_f": second.get("dew_point_pm_f"),
         "tomorrow_summary": second.get("summary", "Forecast"),
         "days": rows,
     }
@@ -273,6 +315,7 @@ def fetch_openmeteo(provider: str, model: str) -> dict:
         "latitude": LATITUDE,
         "longitude": LONGITUDE,
         "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,weather_code,sunrise,sunset",
+        "hourly": "dew_point_2m",
         "temperature_unit": "fahrenheit",
         "precipitation_unit": "inch",
         "timezone": str(LOCAL_ZONE),
@@ -293,7 +336,9 @@ def fetch_openmeteo(provider: str, model: str) -> dict:
             WMO_SUMMARIES.get(item("weather_code"), "Forecast"),
             item("sunrise"), item("sunset"),
         ))
-    return format_cache(provider, iso_now(), rows)
+    hourly = data.get("hourly", {})
+    windows = dew_point_windows(list(zip(hourly.get("time", []), hourly.get("dew_point_2m", []))))
+    return format_cache(provider, iso_now(), apply_dew_points(rows, windows))
 
 
 def fetch_openweather() -> dict:
@@ -301,7 +346,7 @@ def fetch_openweather() -> dict:
     if not api_key:
         raise KeyError("OPENWEATHER_API_KEY")
     query = urllib.parse.urlencode({
-        "lat": LATITUDE, "lon": LONGITUDE, "exclude": "minutely,hourly,alerts",
+        "lat": LATITUDE, "lon": LONGITUDE, "exclude": "minutely,alerts",
         "units": "imperial", "appid": api_key,
     })
     data = get_json(f"https://api.openweathermap.org/data/3.0/onecall?{query}")
@@ -319,7 +364,10 @@ def fetch_openweather() -> dict:
             item.get("sunrise"), item.get("sunset"), phase_name,
         ))
     issued = datetime.fromtimestamp(data.get("current", {}).get("dt", utc_now().timestamp()), timezone.utc).isoformat(timespec="seconds")
-    return format_cache("openweather", issued, rows)
+    windows = dew_point_windows([
+        (item.get("dt"), item.get("dew_point")) for item in data.get("hourly", [])
+    ])
+    return format_cache("openweather", issued, apply_dew_points(rows, windows))
 
 
 def parse_duration(value: str) -> timedelta:
@@ -354,6 +402,24 @@ def allocate_intervals(values: list[dict]) -> dict[str, float]:
     return totals
 
 
+def interval_samples(values: list[dict], converter=lambda value: value) -> list[tuple[datetime, float]]:
+    samples = []
+    for item in values:
+        try:
+            start_text, duration_text = item["validTime"].split("/", 1)
+            cursor = datetime.fromisoformat(start_text.replace("Z", "+00:00"))
+            end = cursor + parse_duration(duration_text)
+            value = finite(converter(item.get("value")))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if value is None:
+            continue
+        while cursor < end:
+            samples.append((cursor, value))
+            cursor += timedelta(hours=1)
+    return samples
+
+
 def fetch_nws() -> dict:
     headers = {"Accept": "application/geo+json"}
     point = get_json(f"https://api.weather.gov/points/{LATITUDE:.5f},{LONGITUDE:.5f}", headers)
@@ -379,8 +445,10 @@ def fetch_nws() -> dict:
     for valid_date, amount_mm in qpf.items():
         if valid_date in rows:
             rows[valid_date]["rain_in"] = round_or_none(mm_to_in(amount_mm), 3)
+    dew_values = grid.get("properties", {}).get("dewpoint", {}).get("values", [])
+    windows = dew_point_windows(interval_samples(dew_values, c_to_f))
     issued = forecast.get("properties", {}).get("updated") or grid.get("properties", {}).get("updateTime") or iso_now()
-    return format_cache("nws", issued, list(rows.values()))
+    return format_cache("nws", issued, apply_dew_points(list(rows.values()), windows))
 
 
 def fetch_wunderground() -> dict:
@@ -392,6 +460,7 @@ def fetch_wunderground() -> dict:
         "language": "en-US", "apiKey": api_key,
     })
     data = get_json(f"https://api.weather.com/v3/wx/forecast/daily/7day?{query}")
+    hourly = get_json(f"https://api.weather.com/v3/wx/forecast/hourly/15day?{query}")
     dates = data.get("validTimeLocal") or []
     highs = data.get("calendarDayTemperatureMax") or []
     lows = data.get("calendarDayTemperatureMin") or []
@@ -417,7 +486,10 @@ def fetch_wunderground() -> dict:
             sunset[index] if index < len(sunset) else None,
             moons[index] if index < len(moons) else None,
         ))
-    return format_cache("wunderground", iso_now(), rows)
+    windows = dew_point_windows(list(zip(
+        hourly.get("validTimeLocal", []), hourly.get("temperatureDewPoint", []),
+    )))
+    return format_cache("wunderground", iso_now(), apply_dew_points(rows, windows))
 
 
 def b64url(value: bytes) -> str:
@@ -489,7 +561,7 @@ def weatherkit_attribution() -> dict:
 def fetch_weatherkit() -> dict:
     token = weatherkit_token()
     query = urllib.parse.urlencode({
-        "dataSets": "forecastDaily", "timezone": str(LOCAL_ZONE), "countryCode": "US",
+        "dataSets": "forecastDaily,forecastHourly", "timezone": str(LOCAL_ZONE), "countryCode": "US",
     })
     data = get_json(
         f"https://weatherkit.apple.com/api/v1/weather/en/{LATITUDE}/{LONGITUDE}?{query}",
@@ -509,8 +581,13 @@ def fetch_weatherkit() -> dict:
             words(item.get("conditionCode")),
             item.get("sunrise"), item.get("sunset"), words(item.get("moonPhase")) if item.get("moonPhase") else None,
         ))
+    hourly = data.get("forecastHourly", {})
+    windows = dew_point_windows([
+        (first_present(item, "forecastStart", "forecastStartTime"), item.get("temperatureDewPoint"))
+        for item in hourly.get("hours", [])
+    ], c_to_f)
     issued = daily.get("metadata", {}).get("readTime") or iso_now()
-    return format_cache("weatherkit", issued, rows, weatherkit_attribution())
+    return format_cache("weatherkit", issued, apply_dew_points(rows, windows), weatherkit_attribution())
 
 
 FETCHERS = {
@@ -557,12 +634,18 @@ def database() -> sqlite3.Connection:
             low_f REAL,
             rain_chance_pct REAL,
             rain_in REAL,
+            dew_point_am_f REAL,
+            dew_point_pm_f REAL,
             summary TEXT,
             PRIMARY KEY(run_id, valid_date)
         );
         CREATE INDEX IF NOT EXISTS forecast_daily_valid_date ON forecast_daily(valid_date);
         CREATE INDEX IF NOT EXISTS forecast_runs_provider_time ON forecast_runs(provider, issued_at);
     """)
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(forecast_daily)")}
+    for column in ("dew_point_am_f", "dew_point_pm_f"):
+        if column not in columns:
+            connection.execute(f"ALTER TABLE forecast_daily ADD COLUMN {column} REAL")
     return connection
 
 
@@ -584,10 +667,11 @@ def archive(connection: sqlite3.Connection, forecast: dict) -> None:
         valid_date = date.fromisoformat(row["date"])
         connection.execute(
             """INSERT OR REPLACE INTO forecast_daily
-               (run_id,valid_date,lead_days,high_f,low_f,rain_chance_pct,rain_in,summary)
-               VALUES(?,?,?,?,?,?,?,?)""",
+               (run_id,valid_date,lead_days,high_f,low_f,rain_chance_pct,rain_in,dew_point_am_f,dew_point_pm_f,summary)
+               VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (run[0], row["date"], (valid_date - issued_date).days, row.get("high_f"), row.get("low_f"),
-             row.get("rain_chance_pct"), row.get("rain_in"), row.get("summary")),
+             row.get("rain_chance_pct"), row.get("rain_in"), row.get("dew_point_am_f"),
+             row.get("dew_point_pm_f"), row.get("summary")),
         )
 
 

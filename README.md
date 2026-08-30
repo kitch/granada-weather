@@ -72,6 +72,9 @@ authentication and normalization, public API security, rainfall counters and
 rollups, forecast-provider normalization, local-date accuracy scoring, and the
 TRMNL payload contract.
 
+Normalized daily forecasts include morning (6–10 AM) and afternoon (2–6 PM)
+median dew points when the provider supplies hourly or gridded dew-point data.
+
 ```sh
 python3 -m unittest discover -s tests -v
 ```
