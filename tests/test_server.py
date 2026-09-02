@@ -150,6 +150,14 @@ class RainStorageTests(unittest.TestCase):
 
 
 class HistoryResolutionTests(unittest.TestCase):
+    def test_heat_index_is_calculated_below_forty_percent_humidity_when_hot_enough(self):
+        apparent = server.apparent_temperature_f({
+            "outdoor_temp_f": 97.7,
+            "outdoor_humidity_pct": 37,
+            "wind_speed_mph": 1.34,
+        })
+        self.assertAlmostEqual(apparent, 102.4, places=1)
+
     def test_hourly_rollup_preserves_true_feels_like_extrema(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "2026-08-30.ndjson"

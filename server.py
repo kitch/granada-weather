@@ -447,7 +447,7 @@ def apparent_temperature_f(row: dict) -> float | None:
         return None
     humidity = row.get("outdoor_humidity_pct")
     wind = row.get("wind_speed_mph")
-    if isinstance(humidity, (int, float)) and math.isfinite(humidity) and temperature >= 80 and humidity >= 40:
+    if isinstance(humidity, (int, float)) and math.isfinite(humidity) and temperature >= 80:
         simple = 0.5 * (temperature + 61 + (temperature - 68) * 1.2 + humidity * 0.094)
         if (temperature + simple) / 2 >= 80:
             result = (

@@ -53,7 +53,7 @@ function raw(row, key) {
 function heatIndexF(temperature, humidity) {
   const temp = Number(temperature);
   const relativeHumidity = Number(humidity);
-  if (!Number.isFinite(temp) || !Number.isFinite(relativeHumidity) || temp < 80 || relativeHumidity < 40) return null;
+  if (!Number.isFinite(temp) || !Number.isFinite(relativeHumidity) || temp < 80) return null;
 
   const simple = 0.5 * (temp + 61 + (temp - 68) * 1.2 + relativeHumidity * 0.094);
   if ((temp + simple) / 2 < 80) return null;
