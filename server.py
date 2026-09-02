@@ -37,7 +37,7 @@ WRITE_LOCK = threading.Lock()
 ROLLUP_LOCK = threading.Lock()
 WU_STATUS_LOCK = threading.Lock()
 WU_QUEUE: queue.Queue[dict] = queue.Queue(maxsize=1)
-ROLLUP_VERSION = 3
+ROLLUP_VERSION = 4
 LOCAL_TIME = ZoneInfo(os.environ.get("WEATHER_TIMEZONE", "America/New_York"))
 MAX_BODY = 64 * 1024
 RECEIVER_PATHS = ("/data/report", "/receive", "/updateweatherstation.php")
