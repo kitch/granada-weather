@@ -320,7 +320,7 @@ function aggregateRangePoints(points) {
     return {
       start,
       duration,
-      x: start + duration / 2,
+      x: bucket.reduce((sum, point) => sum + point.x, 0) / bucket.length,
       low: Math.min(...bucket.map(point => point.low)),
       high: Math.max(...bucket.map(point => point.high)),
       y: bucket.at(-1).y,
@@ -335,11 +335,12 @@ function aggregateRangePoints(points) {
     weeklyBuckets.get(start).push(point);
   });
   return [...weeklyBuckets.entries()].map(([start, bucket]) => {
-    const duration = nextBucketStart(start, true) - start;
+    const observedStart = bucket[0].start;
+    const observedEnd = bucket.at(-1).start + bucket.at(-1).duration;
     return {
-      start,
-      duration,
-      x: start + duration / 2,
+      start: observedStart,
+      duration: observedEnd - observedStart,
+      x: bucket.reduce((sum, point) => sum + point.x, 0) / bucket.length,
       low: bucket.reduce((sum, point) => sum + point.low, 0) / bucket.length,
       high: bucket.reduce((sum, point) => sum + point.high, 0) / bucket.length,
       y: bucket.at(-1).y,
