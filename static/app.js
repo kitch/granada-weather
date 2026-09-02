@@ -7,17 +7,17 @@ const element = (tag, className, text) => {
 };
 
 const metrics = {
-  outdoor_temp_f: {label: 'Outdoor temperature', short: 'Outdoor temp', unit: '°F', group: 'Air', digits: 1},
-  outdoor_humidity_pct: {label: 'Outdoor humidity', short: 'Outdoor humidity', unit: '%', group: 'Air', digits: 0},
-  feels_like_f: {label: 'Feels like', short: 'Feels like', unit: '°F', group: 'Air', digits: 1},
-  dew_point_f: {label: 'Dew point', short: 'Dew point', unit: '°F', group: 'Air', digits: 1, legacy: 'dewptf'},
-  indoor_temp_f: {label: 'Indoor temperature', short: 'Indoor temp', unit: '°F', group: 'Indoor', digits: 1},
-  indoor_humidity_pct: {label: 'Indoor humidity', short: 'Indoor humidity', unit: '%', group: 'Indoor', digits: 0},
+  outdoor_temp_f: {label: 'Outdoor temperature', short: 'Outdoor temp', unit: '°F', group: 'Air', digits: 1, rangeSeries: true},
+  outdoor_humidity_pct: {label: 'Outdoor humidity', short: 'Outdoor humidity', unit: '%', group: 'Air', digits: 0, rangeSeries: true},
+  feels_like_f: {label: 'Feels like', short: 'Feels like', unit: '°F', group: 'Air', digits: 1, rangeSeries: true},
+  dew_point_f: {label: 'Dew point', short: 'Dew point', unit: '°F', group: 'Air', digits: 1, legacy: 'dewptf', rangeSeries: true},
+  indoor_temp_f: {label: 'Indoor temperature', short: 'Indoor temp', unit: '°F', group: 'Indoor', digits: 1, rangeSeries: true},
+  indoor_humidity_pct: {label: 'Indoor humidity', short: 'Indoor humidity', unit: '%', group: 'Indoor', digits: 0, rangeSeries: true},
   wind_speed_mph: {label: 'Wind speed', short: 'Wind', unit: 'mph', group: 'Wind', digits: 1, zeroBased: true, minUpper: 1},
   wind_gust_mph: {label: 'Wind gust', short: 'Gust', unit: 'mph', group: 'Wind', digits: 1, zeroBased: true, minUpper: 1},
   solar_radiation_wm2: {label: 'Solar radiation', short: 'Solar', unit: 'W/m²', group: 'Atmosphere', digits: 0, zeroBased: true, minUpper: 25},
   uv_index: {label: 'UV index', short: 'UV', unit: '', group: 'Atmosphere', digits: 0, zeroBased: true, minUpper: 1},
-  pressure_relative_inhg: {label: 'Pressure', short: 'Pressure', unit: 'hPa', group: 'Atmosphere', digits: 0},
+  pressure_relative_inhg: {label: 'Pressure', short: 'Pressure', unit: 'hPa', group: 'Atmosphere', digits: 0, rangeSeries: true},
   rain_rate_in_hr: {label: 'Rain rate', short: 'Rain rate', unit: 'in/hr', group: 'Rain', digits: 2, legacy: 'rain_hour_in', zeroBased: true, minUpper: 0.1},
   rainfall_in: {label: 'Rainfall', short: 'Rainfall', unit: 'in', group: 'Rain', digits: 3, bars: true},
   wind_direction_deg: {label: 'Wind direction', short: 'Direction', unit: '°', group: 'Wind', digits: 0, detail: true, history: false},
@@ -40,6 +40,7 @@ let chartModel = null;
 let scrubTimestamp = null;
 let scrubbing = false;
 const HISTORY_REFRESH_MS = 10 * 60 * 1000;
+const LONG_RANGE_HOURS = 24 * 30;
 
 function raw(row, key) {
   const metric = metrics[key];
@@ -279,6 +280,73 @@ function formatRainBucket(point) {
   return `${day} ${startTime}–${endTime}`;
 }
 
+function formatRangeBucket(point) {
+  const start = new Date(point.start);
+  if (hours < 8760) return start.toLocaleDateString([], {weekday: 'short', month: 'short', day: 'numeric'});
+  const end = new Date(point.start + point.duration - 1);
+  const startText = start.toLocaleDateString([], {month: 'short', day: 'numeric'});
+  const endText = end.toLocaleDateString([], {month: 'short', day: 'numeric', year: 'numeric'});
+  return `${startText}–${endText}`;
+}
+
+function rangeValue(key, value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return NaN;
+  return key === 'pressure_relative_inhg' ? number * 33.8638866667 : number;
+}
+
+function bucketStart(timestamp, weekly = false) {
+  const date = new Date(timestamp);
+  date.setHours(0, 0, 0, 0);
+  if (weekly) date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return date.getTime();
+}
+
+function nextBucketStart(timestamp, weekly = false) {
+  const date = new Date(timestamp);
+  date.setDate(date.getDate() + (weekly ? 7 : 1));
+  return date.getTime();
+}
+
+function aggregateRangePoints(points) {
+  const dailyBuckets = new Map();
+  points.forEach(point => {
+    const start = bucketStart(point.x);
+    if (!dailyBuckets.has(start)) dailyBuckets.set(start, []);
+    dailyBuckets.get(start).push(point);
+  });
+  const daily = [...dailyBuckets.entries()].map(([start, bucket]) => {
+    const duration = nextBucketStart(start) - start;
+    return {
+      start,
+      duration,
+      x: start + duration / 2,
+      low: Math.min(...bucket.map(point => point.low)),
+      high: Math.max(...bucket.map(point => point.high)),
+      y: bucket.at(-1).y,
+    };
+  }).sort((a, b) => a.x - b.x);
+  if (hours < 8760) return daily;
+
+  const weeklyBuckets = new Map();
+  daily.forEach(point => {
+    const start = bucketStart(point.start, true);
+    if (!weeklyBuckets.has(start)) weeklyBuckets.set(start, []);
+    weeklyBuckets.get(start).push(point);
+  });
+  return [...weeklyBuckets.entries()].map(([start, bucket]) => {
+    const duration = nextBucketStart(start, true) - start;
+    return {
+      start,
+      duration,
+      x: start + duration / 2,
+      low: bucket.reduce((sum, point) => sum + point.low, 0) / bucket.length,
+      high: bucket.reduce((sum, point) => sum + point.high, 0) / bucket.length,
+      y: bucket.at(-1).y,
+    };
+  }).sort((a, b) => a.x - b.x);
+}
+
 function hideScrubber() {
   scrubTimestamp = null;
   $('#chart-readout').hidden = true;
@@ -293,7 +361,8 @@ function drawScrubber(context, model) {
   }
   const point = nearestPoint(model.points, scrubTimestamp);
   const x = (point.x - model.firstTime) / (model.lastTime - model.firstTime || 1) * model.width;
-  const y = 12 + (model.upper - point.y) / (model.upper - model.lower) * (model.height - 18);
+  const pointY = value => 12 + (model.upper - value) / (model.upper - model.lower) * (model.height - 18);
+  const y = pointY(point.y);
   context.save();
   context.strokeStyle = 'rgba(165, 242, 205, .72)';
   context.lineWidth = 1;
@@ -306,6 +375,14 @@ function drawScrubber(context, model) {
   if (model.metric.bars) {
     const barWidth = Math.max(2, point.duration / (model.lastTime - model.firstTime || 1) * model.width - 2);
     context.strokeRect(x - barWidth / 2, y, barWidth, model.height - y);
+  } else if (model.rangeSeries) {
+    [point.high, point.low].forEach(value => {
+      context.fillStyle = '#08120f';
+      context.beginPath();
+      context.arc(x, pointY(value), 5, 0, Math.PI * 2);
+      context.fill();
+      context.stroke();
+    });
   } else {
     context.fillStyle = '#08120f';
     context.beginPath();
@@ -314,8 +391,13 @@ function drawScrubber(context, model) {
     context.stroke();
   }
   context.restore();
-  $('#chart-readout-time').textContent = model.metric.bars ? formatRainBucket(point) : formatScrubTime(point.x);
-  $('#chart-readout-value').textContent = val(point.y, model.metric) + (model.metric.unit ? ` ${model.metric.unit}` : '') + (point.note ? ` · ${point.note}` : '');
+  $('#chart-readout-time').textContent = model.metric.bars
+    ? formatRainBucket(point)
+    : model.rangeSeries ? formatRangeBucket(point) : formatScrubTime(point.x);
+  const unit = model.metric.unit ? ` ${model.metric.unit}` : '';
+  $('#chart-readout-value').textContent = model.rangeSeries
+    ? `HIGH ${val(point.high, model.metric)}${unit} · LOW ${val(point.low, model.metric)}${unit}`
+    : val(point.y, model.metric) + unit + (point.note ? ` · ${point.note}` : '');
   readout.style.left = `${x}px`;
   readout.dataset.edge = x < 90 ? 'left' : x > model.width - 90 ? 'right' : 'center';
   readout.hidden = false;
@@ -340,17 +422,22 @@ function draw() {
   canvas.width = rectangle.width * scale;
   canvas.height = rectangle.height * scale;
   context.scale(scale, scale);
-  const points = history
+  const rangeSeries = Boolean(metric.rangeSeries && hours >= LONG_RANGE_HOURS);
+  const sourcePoints = history
     .map(row => {
       const start = new Date(row.observed_at).getTime();
       const duration = Number(row.rain_bucket_seconds || 0) * 1000;
       const apparent = selected === 'feels_like_f' ? feelsLike(row) : null;
       const source = apparent ? apparent.value : raw(row, selected);
       const value = source == null || source === '' ? NaN : Number(source);
-      return {x: start + (metric.bars ? duration / 2 : 0), start, duration, y: value, note: apparent?.detail};
+      const storedRange = row?._range?.[selected];
+      const low = Array.isArray(storedRange) ? rangeValue(selected, storedRange[0]) : value;
+      const high = Array.isArray(storedRange) ? rangeValue(selected, storedRange[1]) : value;
+      return {x: start + (metric.bars ? duration / 2 : 0), start, duration, y: value, low, high, note: apparent?.detail};
     })
-    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y) && (!metric.zeroBased || point.y >= 0))
+    .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.low) && Number.isFinite(point.high) && (!metric.zeroBased || point.y >= 0))
     .sort((a, b) => a.x - b.x);
+  const points = rangeSeries ? aggregateRangePoints(sourcePoints) : sourcePoints;
   $('#empty').style.display = points.length ? 'none' : 'grid';
   context.clearRect(0, 0, rectangle.width, rectangle.height);
   if (!points.length) {
@@ -363,8 +450,14 @@ function draw() {
   const rangeValues = history
     .map(row => row?._range?.[selected])
     .filter(range => Array.isArray(range) && range.length === 2 && range.every(value => Number.isFinite(Number(value))));
-  const minimum = metric.bars ? 0 : Math.min(...values, ...rangeValues.map(range => Number(range[0])));
-  const maximum = Math.max(...values, ...rangeValues.map(range => Number(range[1])));
+  const minimum = metric.bars
+    ? 0
+    : rangeSeries ? Math.min(...points.map(point => point.low)) : Math.min(...values, ...rangeValues.map(range => rangeValue(selected, range[0])));
+  const maximum = rangeSeries
+    ? Math.max(...points.map(point => point.high))
+    : Math.max(...values, ...rangeValues.map(range => rangeValue(selected, range[1])));
+  const windowMinimum = metric.bars ? 0 : Math.min(...sourcePoints.map(point => point.low));
+  const windowMaximum = Math.max(...sourcePoints.map(point => point.high));
   const padding = Math.max(metric.binary ? 0.5 : metric.unit === 'in' ? 0.01 : 1, (maximum - minimum) * 0.15);
   const lower = metric.bars || metric.zeroBased ? 0 : metric.binary ? -0.15 : minimum - padding;
   const upper = metric.bars
@@ -379,7 +472,10 @@ function draw() {
   const firstTime = metric.bars ? points[0].start : requestedStart;
   const lastPoint = points.at(-1);
   const lastTime = metric.bars ? lastPoint.start + lastPoint.duration : requestedEnd;
-  chartModel = {points, metric, width, height, firstTime, lastTime, lower, upper};
+  chartModel = {points, metric, width, height, firstTime, lastTime, lower, upper, rangeSeries};
+  canvas.setAttribute('aria-label', rangeSeries
+    ? `${metric.label} ${hours >= 8760 ? 'weekly average daily high and low' : 'daily high and low'} chart. Hover, drag, or use the arrow keys to inspect ranges.`
+    : 'Historical weather chart. Hover, drag, or use the arrow keys to inspect readings.');
   context.strokeStyle = '#264137';
   context.fillStyle = '#84a095';
   context.font = '500 12px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -399,6 +495,31 @@ function draw() {
       const y = 12 + (upper - point.y) / (upper - lower) * (height - 18);
       const barWidth = Math.max(2, point.duration / (lastTime - firstTime || 1) * width - 2);
       context.fillRect(x - barWidth / 2, y, barWidth, height - y);
+    });
+  } else if (rangeSeries) {
+    const high = points.map(point => ({
+      x: (point.x - firstTime) / (lastTime - firstTime || 1) * width,
+      y: 12 + (upper - point.high) / (upper - lower) * (height - 18),
+    }));
+    const low = points.map(point => ({
+      x: (point.x - firstTime) / (lastTime - firstTime || 1) * width,
+      y: 12 + (upper - point.low) / (upper - lower) * (height - 18),
+    }));
+    context.beginPath();
+    high.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y));
+    [...low].reverse().forEach(point => context.lineTo(point.x, point.y));
+    context.closePath();
+    context.fillStyle = 'rgba(81,211,154,.10)';
+    context.fill();
+    [
+      {coordinates: high, color: '#a5f2cd', width: 2},
+      {coordinates: low, color: '#668d7d', width: 1.5},
+    ].forEach(line => {
+      context.beginPath();
+      line.coordinates.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y));
+      context.strokeStyle = line.color;
+      context.lineWidth = line.width;
+      context.stroke();
     });
   } else {
     const intervals = points.slice(1).map((point, index) => point.x - points[index].x).filter(value => value > 0).sort((a, b) => a - b);
@@ -430,11 +551,12 @@ function draw() {
   $('#low-label').textContent = metric.bars ? 'TOTAL' : 'LOW';
   $('#high-label').textContent = metric.bars ? 'WETTEST' : 'HIGH';
   $('#latest-label').textContent = metric.bars ? 'LATEST' : historyEnd ? 'LATEST' : 'CURRENT';
-  $('#low').textContent = val(metric.bars ? values.reduce((sum, value) => sum + value, 0) : minimum, metric) + (metric.unit ? ` ${metric.unit}` : '');
-  $('#high').textContent = val(maximum, metric) + (metric.unit ? ` ${metric.unit}` : '');
+  $('#low').textContent = val(metric.bars ? values.reduce((sum, value) => sum + value, 0) : windowMinimum, metric) + (metric.unit ? ` ${metric.unit}` : '');
+  $('#high').textContent = val(windowMaximum, metric) + (metric.unit ? ` ${metric.unit}` : '');
   const latestValue = metric.bars || historyEnd ? lastPoint.y : raw(current, selected);
   const formattedLatest = val(latestValue, metric);
   $('#latest-value').textContent = formattedLatest + (formattedLatest !== '—' && metric.unit ? ` ${metric.unit}` : '');
+  if (rangeSeries) $('#count').textContent = `${points.length} ${hours >= 8760 ? 'weekly' : 'daily'} ranges shown`;
   drawScrubber(context, chartModel);
 }
 

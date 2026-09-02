@@ -37,7 +37,7 @@ WRITE_LOCK = threading.Lock()
 ROLLUP_LOCK = threading.Lock()
 WU_STATUS_LOCK = threading.Lock()
 WU_QUEUE: queue.Queue[dict] = queue.Queue(maxsize=1)
-ROLLUP_VERSION = 2
+ROLLUP_VERSION = 3
 LOCAL_TIME = ZoneInfo(os.environ.get("WEATHER_TIMEZONE", "America/New_York"))
 MAX_BODY = 64 * 1024
 RECEIVER_PATHS = ("/data/report", "/receive", "/updateweatherstation.php")
@@ -439,6 +439,39 @@ def rain_increment(row: dict, previous_total: float | None) -> tuple[float, floa
     return max(0.0, delta if delta >= 0 else float(total)), float(total)
 
 
+def apparent_temperature_f(row: dict) -> float | None:
+    """Match the browser's heat-index/wind-chill selection for rollup ranges."""
+    try:
+        temperature = float(row["outdoor_temp_f"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    humidity = row.get("outdoor_humidity_pct")
+    wind = row.get("wind_speed_mph")
+    if isinstance(humidity, (int, float)) and math.isfinite(humidity) and temperature >= 80 and humidity >= 40:
+        simple = 0.5 * (temperature + 61 + (temperature - 68) * 1.2 + humidity * 0.094)
+        if (temperature + simple) / 2 >= 80:
+            result = (
+                -42.379 + 2.04901523 * temperature + 10.14333127 * humidity
+                - 0.22475541 * temperature * humidity
+                - 0.00683783 * temperature * temperature
+                - 0.05481717 * humidity * humidity
+                + 0.00122874 * temperature * temperature * humidity
+                + 0.00085282 * temperature * humidity * humidity
+                - 0.00000199 * temperature * temperature * humidity * humidity
+            )
+            if humidity < 13 and temperature <= 112:
+                result -= ((13 - humidity) / 4) * math.sqrt((17 - abs(temperature - 95)) / 17)
+            elif humidity > 85 and temperature <= 87:
+                result += ((humidity - 85) / 10) * ((87 - temperature) / 5)
+            if result >= temperature + 0.5:
+                return result
+    if isinstance(wind, (int, float)) and math.isfinite(wind) and temperature <= 50 and wind > 3:
+        result = 35.74 + 0.6215 * temperature - 35.75 * wind ** 0.16 + 0.4275 * temperature * wind ** 0.16
+        if result <= temperature - 0.5:
+            return result
+    return temperature
+
+
 def build_hourly_rollup(path: Path) -> list[dict]:
     buckets: dict[int, dict] = {}
     prior_rain = previous_rain_total(path)
@@ -455,8 +488,9 @@ def build_hourly_rollup(path: Path) -> list[dict]:
                 bucket["last"] = row
                 increment, prior_rain = rain_increment(row, prior_rain)
                 bucket["rainfall_in"] = bucket.get("rainfall_in", 0.0) + increment
-                for key in PUBLIC_FIELDS - {"received_at", "observed_at", "_range"}:
-                    value = row.get(key)
+                values = {key: row.get(key) for key in PUBLIC_FIELDS - {"received_at", "observed_at", "_range"}}
+                values["feels_like_f"] = apparent_temperature_f(row)
+                for key, value in values.items():
                     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                         continue
                     metric = bucket["metrics"].setdefault(
@@ -614,7 +648,10 @@ def merge_rainfall(rows: list[dict], bars: list[dict]) -> list[dict]:
 def read_history(hours: int, end: float | None = None, limit: int = 2000) -> list[dict]:
     end = min(time.time(), end or time.time())
     start = end - hours * 3600
-    if hours <= 24 * 31:
+    # Detailed samples are useful through seven days. Longer windows use the
+    # hourly rollups, which preserve each hour's true min/max range while
+    # avoiding a dense, visually noisy payload for 30-day and yearly charts.
+    if hours <= 24 * 7:
         source = read_raw_range(start - 24 * 3600, end)
         visible = [row for row in source if datetime.fromisoformat(row["observed_at"]).timestamp() >= start]
         return merge_rainfall(downsample(visible, start, end, limit), rainfall_bars(source, start, end, hours, True))

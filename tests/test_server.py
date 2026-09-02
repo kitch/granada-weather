@@ -149,6 +149,45 @@ class RainStorageTests(unittest.TestCase):
         self.assertEqual(nonzero, [0.03, 0.04])
 
 
+class HistoryResolutionTests(unittest.TestCase):
+    def test_hourly_rollup_preserves_true_feels_like_extrema(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "2026-08-30.ndjson"
+            path.write_text("\n".join(json.dumps(row) for row in [
+                {
+                    "observed_at": "2026-08-30T16:00:00+00:00", "outdoor_temp_f": 82,
+                    "outdoor_humidity_pct": 70, "wind_speed_mph": 1,
+                },
+                {
+                    "observed_at": "2026-08-30T16:30:00+00:00", "outdoor_temp_f": 90,
+                    "outdoor_humidity_pct": 75, "wind_speed_mph": 2,
+                },
+            ]) + "\n")
+            rows = server.build_hourly_rollup(path)
+        self.assertEqual(len(rows), 1)
+        self.assertGreater(rows[0]["_range"]["feels_like_f"][1], 100)
+        self.assertLess(rows[0]["_range"]["feels_like_f"][0], rows[0]["_range"]["feels_like_f"][1])
+
+    def test_seven_day_history_uses_detailed_observations(self):
+        end = datetime(2026, 8, 30, 12, tzinfo=timezone.utc).timestamp()
+        with patch.object(server, "read_raw_range", return_value=[]) as raw, \
+                patch.object(server, "read_hourly_day") as hourly, \
+                patch.object(server, "rainfall_bars", return_value=[]):
+            server.read_history(24 * 7, end=end)
+        raw.assert_called_once()
+        hourly.assert_not_called()
+
+    def test_thirty_day_history_uses_range_preserving_hourly_rollups(self):
+        end = datetime(2026, 8, 30, 12, tzinfo=timezone.utc).timestamp()
+        with patch.object(server, "read_raw_range") as raw, \
+                patch.object(server, "read_hourly_day", return_value=[]) as hourly, \
+                patch.object(server, "rainfall_bars", return_value=[]), \
+                patch.object(server, "read_latest", return_value={}):
+            server.read_history(24 * 30, end=end)
+        raw.assert_not_called()
+        self.assertGreater(hourly.call_count, 0)
+
+
 class PublicHttpTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
